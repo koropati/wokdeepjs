@@ -1,17 +1,62 @@
 import yargs from 'yargs';
 import { NeuralNetwork } from './lib/deep.mjs';
 import { PreprocessingImage } from './lib/preprocessing.mjs';
+import { extractFeaturesAndSaveToExcel, readExcel } from './lib/extract.mjs';
+
 
 const argv = yargs
-    .command('preprocess', 'Proses gambar', {
+    .command('gray', 'Proses konversi gambar ke grayscale', {
+        input: {
+            alias: 'i',
+            describe: 'Lokasi gambar yang akan dikonversi',
+            demandOption: true,
+            type: 'string',
+        },
         output: {
             alias: 'o',
-            describe: 'Lokasi penyimpanan gambar hasil preprocessing',
+            describe: 'Lokasi hasil konversi gambar',
             demandOption: true,
             type: 'string',
         },
     })
+
+    .command('biner', 'Proses konversi gambar ke biner', {
+        input: {
+            alias: 'i',
+            describe: 'Lokasi gambar yang akan dikonversi',
+            demandOption: true,
+            type: 'string',
+        },
+        output: {
+            alias: 'o',
+            describe: 'Lokasi hasil konversi gambar',
+            demandOption: true,
+            type: 'string',
+        },
+    })
+
+    .command('extract', 'Proses ekstraksi fitur', {
+        input: {
+            alias: 'i',
+            describe: 'Folder Lokasi gambar yang akan ekstraksi',
+            demandOption: true,
+            type: 'string',
+        },
+        output: {
+            alias: 'o',
+            describe: 'Folder lokasi file ekstraksi',
+            demandOption: true,
+            type: 'string',
+        },
+    })
+
     .command('training', 'Latih model', {
+        input: {
+            alias: 'i',
+            describe: 'Input path file excel dataset',
+            demandOption: true,
+            type: 'string',
+        },
         output: {
             alias: 'o',
             describe: 'Lokasi penyimpanan model',
@@ -24,49 +69,67 @@ const argv = yargs
 
 const method = argv._[0];
 
-if (method === 'preprocess') {
-    const imagePath = 'path/ke/gambar.jpg'; // Ganti dengan path gambar yang ingin diolah
-    const outputPath = argv.output; // Lokasi penyimpanan gambar hasil preprocessing
-
-    const preprocessing = new PreprocessingImage(imagePath);
-
+if (method === 'gray') {
+    const inputPath = argv.input;
+    const outputPath = argv.output;
+    const preprocessing = new PreprocessingImage(inputPath);
     (async () => {
         await preprocessing.loadImage();
         await preprocessing.toGrayscale();
-        await preprocessing.saveFeatureExtraction(outputPath);
+        await preprocessing.saveImage(outputPath);
     })();
+
+} else if (method === 'biner') {
+    const inputPath = argv.input;
+    const outputPath = argv.output;
+    const threshold = 128; // Set your desired threshold value here
+
+    if (typeof threshold !== 'number') {
+        console.error('Threshold must be a valid number.');
+    } else {
+        const preprocessing = new PreprocessingImage(inputPath);
+        (async () => {
+            try {
+                await preprocessing.loadImage();
+                await preprocessing.toBinary(threshold);
+                await preprocessing.saveImage(outputPath, 1);
+                console.log('Image converted to binary successfully.');
+            } catch (error) {
+                console.error('Error processing the image:', error);
+            }
+        })();
+    }
+} else if (method === 'extract') {
+    const inputPath = argv.input;
+    const outputPath = argv.output;
+
+    extractFeaturesAndSaveToExcel(inputPath, outputPath, 20, 20, 100)
+        .then(() => console.log('Feature extraction completed.'))
+        .catch(error => console.error('Error:', error));
+
 } else if (method === 'training') {
-    // const modelPath = 'model/model.json'; // Ganti dengan path model yang ingin dilatih
+    const inputPath = argv.input;
     const outputPath = argv.output; // Lokasi penyimpanan model
 
-    const inputNodes = 4;
-    const outputNodes = 1;
-    const epochSize = 100;
-    const learningRate = 0.1;
+    readExcel(inputPath).then(data => {
+        const { numberOfClass, labels, features } = data;
 
-    const nn = new NeuralNetwork(inputNodes, outputNodes);
+        const inputNodes = features[0].length;
+        const outputNodes = numberOfClass;
+        const epochSize = 100;
+        const learningRate = 0.1;
 
+        console.log('Panjang Fitur Vektor:', inputNodes);
+        console.log('Jumlah Kelas:', numberOfClass);
 
-    const irisData = [
-        [5.1, 3.5, 1.4, 0.2], // Sample 1: Sepal length, sepal width, petal length, petal width for Iris setosa
-        [4.9, 3.0, 1.4, 0.2], // Sample 2: Sepal length, sepal width, petal length, petal width for Iris setosa
-        // ... (data lainnya)
-        [6.3, 3.3, 6.0, 2.5], // Sample 149: Sepal length, sepal width, petal length, petal width for Iris virginica
-        [5.9, 3.0, 5.1, 1.8]  // Sample 150: Sepal length, sepal width, petal length, petal width for Iris virginica
-    ];
+        const nn = new NeuralNetwork(inputNodes, outputNodes);
 
-    const irisLabel = [0, 0, 1, 1];
-    nn.train(irisData, irisLabel, epochSize, learningRate);
+        nn.train(features, labels, epochSize, learningRate);
 
-    (async () => {
-        // Lakukan pelatihan model di sini
-        // Simpan model setelah pelatihan
-        const model = nn.getModel();
-        await nn.saveModel(outputPath, model);
-    })();
+        (async () => {
+            const model = nn.getModel();
+            await nn.saveModel(outputPath, model);
+        })();
 
-    const newInput = [5.0, 3.2, 1.3, 0.2];
-    const prediction = nn.forwardPropagate(newInput);
-
-    console.log("Prediction is : ", prediction);
+    })
 }
