@@ -1,6 +1,7 @@
 import yargs from 'yargs';
 import { NeuralNetwork } from './lib/deep.mjs';
-import { normalizeArray2D, invertBinaryArray2D, textLineSegmentation, charColumnSegmentation, getArrayDimensions, PreprocessingImage } from './lib/preprocessing.mjs';
+import { PreprocessingImage } from './lib/preprocessing.mjs';
+import { Segmentation } from './lib/segmentation.mjs';
 import { extractFeaturesAndSaveToExcel, readExcel } from './lib/extract.mjs';
 // import { TextSegmentation } from './lib/textSegement.mjs';
 
@@ -157,36 +158,22 @@ if (method === 'gray') {
 } else if (method === 'segment') {
     const inputPath = argv.input;
     const outputPath = argv.output;
-    const threshold = 128; // Set your desired threshold value here
+    const threshold = 128;
 
     if (typeof threshold !== 'number') {
         console.error('Threshold must be a valid number.');
     } else {
         const preprocessing = new PreprocessingImage(inputPath);
+        const segmentation = new Segmentation(25, 25);
         (async () => {
             try {
                 await preprocessing.loadImage();
                 await preprocessing.toBinary(threshold);
-                // await preprocessing.saveImage(outputPath, 1);
-                console.log('Image converted to binary successfully.');
-                var data = await preprocessing.imageToArray();
-                data = normalizeArray2D(data);
-                data = invertBinaryArray2D(data);
-                console.log("data length: ", getArrayDimensions(data))
-                var lineSegment = textLineSegmentation(data);
-                var character = charColumnSegmentation(lineSegment[0]);
 
-                for (var i = 0; i < character.length; i++) {
-                    var dimension = getArrayDimensions(character[i]);
-                    await preprocessing.arrayBinerToImage(character[i], dimension.width, dimension.height)
-                    await preprocessing.saveImage(outputPath + "-" + i + ".jpg");
-                }
-                // console.log("character Segment: ", character[0]);
-
-                // var dimension = getArrayDimensions(character[2]);
-                // await preprocessing.arrayBinerToImage(character[2], dimension.width, dimension.height)
-                // await preprocessing.saveImage(outputPath);
-                // console.log("segment: ", getArrayDimensions(lineSegment[0]));
+                var data = await preprocessing.imageToArray('binary');
+                var invertData = await segmentation.invert(data);
+                await segmentation.getSegementation(invertData);
+                await segmentation.saveImage(outputPath);
 
             } catch (error) {
                 console.error('Error processing the image:', error);
