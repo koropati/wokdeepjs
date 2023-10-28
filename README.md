@@ -24,16 +24,28 @@ node .\main.js prepwater -i img\test\meter.png -o img\test_out\meter-out.jpg
 
 #segment image
 
-node .\main.js segment -i img\test\angka.png -o img\test_out\
+node .\main.js segment -i img\test\list-number.png -o img\test_out\
+node .\main.js segment -i img\test\number-test.png -o img\test_out\
 
 #extract Feature
 node .\main.js extract -i dataset-img\mnist\train -o dataset-feature\mnist.xlsx
 node .\main.js extract -i dataset-img\mnist\test -o dataset-feature\mnist-test.xlsx
 
+node .\main.js extract -i dataset-img\mynumber\train -o dataset-feature\mynumber.xlsx
+node .\main.js extract -i dataset-img\mynumber\test -o dataset-feature\mynumber-test.xlsx
+
+
 #training
 
 node .\main.js training -i dataset-feature\mnist.xlsx -o model\mnist.json
+node .\main.js training -i dataset-feature\mynumber.xlsx -o model\mynumber.json
+
+node .\main.js training -i dataset-feature\mynumber.xlsx -o model\mynumber.json -t 1
 
 #testing
 
 node .\main.js testing -m model\mnist.json -i dataset-feature\mnist-test.xlsx
+
+node .\main.js testing -m model\mynumber.json -i dataset-feature\mynumber-test.xlsx
+
+node .\main.js testing -m model\mynumber.json -i dataset-feature\mynumber-test.xlsx -t 1

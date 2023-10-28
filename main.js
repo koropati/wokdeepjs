@@ -1,9 +1,14 @@
 import yargs from 'yargs';
 import { NeuralNetwork } from './lib/deep.mjs';
+import { NeuralNetworkV2 } from './lib/deepV2.mjs';
 import { PreprocessingImage } from './lib/preprocessing.mjs';
 import { Segmentation } from './lib/segmentation.mjs';
 import { extractFeaturesAndSaveToExcel, readExcel } from './lib/extract.mjs';
-// import { TextSegmentation } from './lib/textSegement.mjs';
+import { ExtractFeature } from './lib/extractFeature.mjs';
+
+import ExcelJS from 'exceljs';
+import * as fs from 'node:fs';
+import path from "node:path";
 
 
 const argv = yargs
@@ -89,6 +94,12 @@ const argv = yargs
             demandOption: true,
             type: 'string',
         },
+        type: {
+            alias: 't',
+            describe: 'type model',
+            demandOption: true,
+            type: 'integer',
+        },
         output: {
             alias: 'o',
             describe: 'Lokasi penyimpanan model',
@@ -103,6 +114,12 @@ const argv = yargs
             describe: 'Input path file model json',
             demandOption: true,
             type: 'string',
+        },
+        type: {
+            alias: 't',
+            describe: 'type model',
+            demandOption: true,
+            type: 'integer',
         },
         input: {
             alias: 'i',
@@ -151,9 +168,68 @@ if (method === 'gray') {
     const inputPath = argv.input;
     const outputPath = argv.output;
 
-    extractFeaturesAndSaveToExcel(inputPath, outputPath, 20, 20, 100)
-        .then(() => console.log('Feature extraction completed.'))
-        .catch(error => console.error('Error:', error));
+    const limit = 250;
+    const threshold = 128;
+    const width = 20;
+    const height = 20;
+
+    const preprocessing = new PreprocessingImage();
+    const extractor = new ExtractFeature();
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Features');
+
+    // Kolom "Label" dan "Features" pada file Excel
+    worksheet.columns = [
+        { header: 'Label', key: 'label' },
+        { header: 'Features', key: 'features' },
+    ];
+
+    const classFolders = fs.readdirSync(inputPath);
+
+    // Iterasi melalui semua subfolder (kelas)
+    for (const classFolder of classFolders) {
+        const classFolderPath = path.join(inputPath, classFolder);
+
+        if (fs.statSync(classFolderPath).isDirectory()) {
+            const label = classFolder; // Gunakan nama subfolder sebagai label
+
+            console.log("Processing Image class : ", label);
+
+            // Iterasi melalui semua gambar dalam subfolder
+            const imageFiles = fs.readdirSync(classFolderPath);
+
+            // Batasi jumlah gambar yang akan diproses
+            const limitedImageFiles = imageFiles.slice(0, limit);
+
+            for (const imageFile of limitedImageFiles) {
+                const imagePath = path.join(classFolderPath, imageFile);
+                // Preprocessing
+                await preprocessing.readImage(imagePath);
+                await preprocessing.toBinary(threshold);
+                var dataArray = await preprocessing.imageToArray('binary');
+                var arrayImage = await preprocessing.removeBlackAreaAndResize(dataArray, width, height);
+
+                // Extract Feature
+                await extractor.loadArray(arrayImage);
+                var dataFeatureLBP = await extractor.calculateLBP();
+                var dataFeatureChainCode = await extractor.flatten2DArray();
+
+                var normalizeArrayLBP = await extractor.normalize1DArray(dataFeatureLBP, 0, 1);
+                var normalizeArrayCC = await extractor.normalize1DArray(dataFeatureChainCode, 0, 1);
+
+                var normalizeArray = normalizeArrayLBP.concat(normalizeArrayCC);
+
+                worksheet.addRow({
+                    label,
+                    features: Array.isArray(normalizeArray) ? normalizeArray.join(', ') : '', // Pastikan setiap elemen adalah array
+                });
+            }
+        }
+    }
+
+    // Simpan file Excel
+    await workbook.xlsx.writeFile(outputPath);
+    console.log('Features extracted and saved to Excel successfully.');
 
 } else if (method === 'segment') {
     const inputPath = argv.input;
@@ -164,7 +240,7 @@ if (method === 'gray') {
         console.error('Threshold must be a valid number.');
     } else {
         const preprocessing = new PreprocessingImage(inputPath);
-        const segmentation = new Segmentation(25, 25);
+        const segmentation = new Segmentation(50, 50);
         (async () => {
             try {
                 await preprocessing.loadImage();
@@ -205,75 +281,61 @@ if (method === 'gray') {
 } else if (method === 'training') {
     const inputPath = argv.input;
     const outputPath = argv.output; // Lokasi penyimpanan model
+    const typeModel = argv.type;
 
     readExcel(inputPath).then(data => {
         const { numberOfClass, labels, features } = data;
 
         const inputNodes = features[0].length;
         const outputNodes = numberOfClass;
-        const epochSize = 200;
+        const hiddenNodes = Math.floor((inputNodes * outputNodes) / 5);
+        const epochSize = 800;
         const learningRate = 0.01;
 
-        console.log('Panjang Fitur Vektor:', inputNodes);
-        console.log('Jumlah Kelas:', numberOfClass);
+        if (typeModel === 2) {
+            console.log('Input Node:', inputNodes);
+            console.log('Hidden Node:', hiddenNodes);
+            console.log('Output Node:', numberOfClass);
 
-        const nn = new NeuralNetwork(inputNodes, outputNodes);
+            const nn = new NeuralNetworkV2(inputNodes, hiddenNodes, outputNodes);
+            nn.train(features, labels, epochSize, learningRate);
 
-        nn.train(features, labels, epochSize, learningRate);
-
-        (async () => {
             const model = nn.getModel();
-            await nn.saveModel(outputPath, model);
-        })();
+            nn.saveModel(outputPath, model);
+        } else {
+            console.log('Input Node:', inputNodes);
+            console.log('Output Node:', numberOfClass);
+
+            const nn = new NeuralNetwork(inputNodes, outputNodes);
+            nn.train(features, labels, epochSize, learningRate);
+
+            const model = nn.getModel();
+            nn.saveModel(outputPath, model);
+        }
+
 
     })
+
 } else if (method === 'testing') {
     const inputPath = argv.input;
     const modelPath = argv.model;
+    const typeModel = argv.type;
 
-    const nn = new NeuralNetwork(0, 0);
 
     readExcel(inputPath).then(data => {
         const { numberOfClass, labels, features } = data;
-
-        console.log("labels: ", labels);
-
-        // const inputNodes = features[0].length;
-        // const outputNodes = numberOfClass;
-        // const epochSize = 100;
-        // const learningRate = 0.1;
-
-        // console.log('Panjang Fitur Vektor:', inputNodes);
-        // console.log('Jumlah Kelas:', numberOfClass);
-
-        // const nn = new NeuralNetwork(inputNodes, outputNodes);
-
-        // nn.train(features, labels, epochSize, learningRate);
-
-        (async () => {
-            await nn.loadModel(modelPath);
+        if (typeModel === 2) {
+            const nn = new NeuralNetworkV2(0, 0, 0);
+            nn.loadModel(modelPath);
             const score = nn.test(features, labels);
             console.log("Score Test : ", score);
-        })();
+        } else {
+            const nn = new NeuralNetwork(0, 0);
+            nn.loadModel(modelPath);
+            const score = nn.test(features, labels);
+            console.log("Score Test : ", score);
+        }
 
     })
-
-
-
-    // readExcel(inputPath).then(data => {
-    //     const {_, actualLabels, features} = data;
-
-    //     console.log("actualLabels: ", actualLabels);
-    //     // console.log("features: ", features);
-
-    //     // (async () => {
-    //     //     await nn.loadModel(modelPath);
-    //     //     const score = nn.test(features, actualLabels);
-    //     //     console.log("Score Test : ", score);
-    //     // })();
-
-
-
-    // })
 
 }
