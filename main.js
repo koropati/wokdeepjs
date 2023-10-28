@@ -168,7 +168,7 @@ if (method === 'gray') {
     const inputPath = argv.input;
     const outputPath = argv.output;
 
-    const limit = 250;
+    const limit = 500;
     const threshold = 128;
     const width = 20;
     const height = 20;
@@ -212,12 +212,15 @@ if (method === 'gray') {
                 // Extract Feature
                 await extractor.loadArray(arrayImage);
                 var dataFeatureLBP = await extractor.calculateLBP();
-                var dataFeatureChainCode = await extractor.flatten2DArray();
+                var dataFeatureFlat = await extractor.flatten2DArray();
+                var dataFeatureHog = await extractor.calculateHoG(6, 4, 9);
 
                 var normalizeArrayLBP = await extractor.normalize1DArray(dataFeatureLBP, 0, 1);
-                var normalizeArrayCC = await extractor.normalize1DArray(dataFeatureChainCode, 0, 1);
+                var normalizeArrayFlat = await extractor.normalize1DArray(dataFeatureFlat, 0, 1);
+                var normalizeArrayHog = await extractor.normalize1DArray(dataFeatureHog, 0, 1);
 
-                var normalizeArray = normalizeArrayLBP.concat(normalizeArrayCC);
+                var normalizeArray = normalizeArrayLBP.concat(normalizeArrayFlat);
+                var normalizeArray = normalizeArray.concat(normalizeArrayHog);
 
                 worksheet.addRow({
                     label,
@@ -289,7 +292,7 @@ if (method === 'gray') {
         const inputNodes = features[0].length;
         const outputNodes = numberOfClass;
         const hiddenNodes = Math.floor((inputNodes * outputNodes) / 5);
-        const epochSize = 800;
+        const epochSize = 200;
         const learningRate = 0.01;
 
         if (typeModel === 2) {
