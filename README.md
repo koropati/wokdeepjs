@@ -40,7 +40,7 @@ node .\main.js extract -i dataset-img\mynumber\test -o dataset-feature\mynumber-
 node .\main.js training -i dataset-feature\mnist.xlsx -o model\mnist.json
 node .\main.js training -i dataset-feature\mynumber.xlsx -o model\mynumber.json
 
-node .\main.js training -i dataset-feature\mynumber.xlsx -o model\mynumber.json -t 1
+node .\main.js training -i dataset-feature\mynumber.xlsx -o model\mynumber-v1.json -t 1
 
 #testing
 
@@ -48,4 +48,13 @@ node .\main.js testing -m model\mnist.json -i dataset-feature\mnist-test.xlsx
 
 node .\main.js testing -m model\mynumber.json -i dataset-feature\mynumber-test.xlsx
 
-node .\main.js testing -m model\mynumber.json -i dataset-feature\mynumber-test.xlsx -t 1
+node .\main.js testing -m model\mynumber-v1.json -i dataset-feature\mynumber-test.xlsx -t 1
+
+#OCR Water meter
+
+node .\main.js ocr-water-meter -m model\mynumber-v1.json -t 1 -i img\test\meter.png
+
+
+#Playground
+
+node .\main.js playground -i img\test\meter.png -o img\test_out\

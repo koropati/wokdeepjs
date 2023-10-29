@@ -129,6 +129,43 @@ const argv = yargs
         },
     })
 
+    .command('ocr-water-meter', 'Prediction OCR of water meter image', {
+        model: {
+            alias: 'm',
+            describe: 'Input path file model json',
+            demandOption: true,
+            type: 'string',
+        },
+        type: {
+            alias: 't',
+            describe: 'type model',
+            demandOption: true,
+            type: 'integer',
+        },
+        input: {
+            alias: 'i',
+            describe: 'Location image of water meter',
+            demandOption: true,
+            type: 'string',
+        },
+    })
+
+    .command('playground', 'Playground code', {
+        input: {
+            alias: 'i',
+            describe: 'Lokasi input image',
+            demandOption: true,
+            type: 'string',
+        },
+
+        output: {
+            alias: 'o',
+            describe: 'Lokasi output image',
+            demandOption: true,
+            type: 'string',
+        },
+    })
+
     .help()
     .argv;
 
@@ -338,7 +375,58 @@ if (method === 'gray') {
             const score = nn.test(features, labels);
             console.log("Score Test : ", score);
         }
-
     })
+} else if (method === 'ocr-water-meter') {
+    const inputPath = argv.input;
+    const modelPath = argv.model;
+    const typeModel = argv.type;
+    const threshold = 128;
+
+    const labelClass = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+    var resultWaterMeter = "";
+
+    const extractor = new ExtractFeature();
+    const preprocessing = new PreprocessingImage(inputPath);
+    var chars = await preprocessing.prepWaterMeter(threshold, 20, 20);
+
+    for (var i = 0; i < chars.length; i++) {
+        await extractor.loadArray(chars[i]);
+        var feature = await extractor.getFeatureOcr();
+
+        // console.log("Feature Length: ", feature.length);
+
+        if (typeModel === 2) {
+            const nn = new NeuralNetworkV2(0, 0, 0);
+            nn.loadModel(modelPath);
+            var _, scoreLabels = nn.forwardPropagate(feature);
+            var indexPredicted = nn.getIndexFromHigherValue(scoreLabels);
+            resultWaterMeter += labelClass[indexPredicted];
+
+        } else {
+            const nn = new NeuralNetwork(0, 0);
+            nn.loadModel(modelPath);
+            var scoreLabels = nn.forwardPropagate(feature);
+            var indexPredicted = nn.getIndexFromHigherValue(scoreLabels);
+            resultWaterMeter += labelClass[indexPredicted];
+        }
+    }
+
+    console.log("Result OCR: ", resultWaterMeter);
+
+
+} else if (method === 'playground') {
+    const inputPath = argv.input;
+    const outputPath = argv.output;
+    const threshold = 128;
+
+
+    const preprocessing = new PreprocessingImage(inputPath);
+    var chars = await preprocessing.prepWaterMeter(threshold, 20, 35);
+
+    for (var i = 0; i < chars.length; i++) {
+        await preprocessing.arrayToImage(chars[i]);
+        await preprocessing.saveImage(outputPath + "segement_" + i + ".jpg");
+    }
+
 
 }
